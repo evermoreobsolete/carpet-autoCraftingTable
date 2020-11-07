@@ -3,13 +3,19 @@ package carpet_autocraftingtable;
 import carpet_autocraftingtable.mixins.CraftingInventoryMixin;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.Block;
+import net.minecraft.block.InventoryProvider;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.LockableContainerBlockEntity;
+import net.minecraft.block.entity.Hopper;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.CraftingInventory;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.SidedInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.recipe.CraftingRecipe;
@@ -23,12 +29,19 @@ import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableText;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.ItemScatterer;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.registry.Registry;
+
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Logger;
+import java.util.logging.LogManager;
+
+
+
 
 public class CraftingTableBlockEntity extends LockableContainerBlockEntity implements SidedInventory, RecipeUnlocker, RecipeInputProvider
 {
@@ -98,7 +111,58 @@ public class CraftingTableBlockEntity extends LockableContainerBlockEntity imple
 
     @Override
     public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-        if (slot == 0) return !output.isEmpty() || getCurrentRecipe().isPresent();
+        if (slot == 0) {
+            if (this.world == null) return false;
+
+            if(!output.isEmpty() || getCurrentRecipe().isPresent()) {
+                Item item = null;
+
+                if( ! output.isEmpty()) {
+                    item = output.getItem();
+                }
+                else {
+                    item = getCurrentRecipe().get().getOutput().getItem();
+                }
+
+                double x = (double)this.pos.getX() + 0.5D;
+                double y = (double)this.pos.getY() - 0.5D;
+                double z = (double)this.pos.getZ() + 0.5D;
+
+                BlockPos blockPos = new BlockPos(x, y, z);
+                BlockState blockState = world.getBlockState(blockPos);
+
+                if (blockState.isOf(Blocks.HOPPER)) {
+                    Block block = blockState.getBlock();
+                    BlockEntity blockEntity = world.getBlockEntity(blockPos);
+
+                    Inventory hopperInventory = null;
+
+                    if (blockEntity instanceof Inventory) {
+                        hopperInventory = (Inventory)blockEntity;
+                    }
+
+                    if(hopperInventory == null) return false;
+
+                    for(int i = 0; i < hopperInventory.size(); ++i) {
+                        Logger.getLogger("autocraft").info(String.format("Try slot %d", i));
+                        ItemStack itemStack = hopperInventory.getStack(i);
+                        int count = itemStack.getCount();
+                        if (
+                            itemStack.isEmpty() || (
+                                item == itemStack.getItem() 
+                                && count > 0
+                                && count < itemStack.getMaxCount()
+                            )
+                        ) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         return true;
     }
 
